@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GHR Impact Manager</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .scroller::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scroller::-webkit-scrollbar-track { background: #f1f5f9; }
+        .scroller::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .sort-icon { display: inline-block; width: 12px; height: 12px; margin-left: 4px; opacity: 0.5; }
+        .sort-active { opacity: 1; color: #2563eb; }
+        
+        .tooltip { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 50; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: normal; pointer-events: none; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .has-tooltip { position: relative; display: inline-block; cursor: help; } 
+        .has-tooltip:hover .tooltip { visibility: visible; opacity: 1; }
+
+        .multi-select-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 40; width: 100%; max-height: 300px; overflow-y: auto; background: white; border: 1px solid #e2e8f0; border-radius: 0.375rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .multi-select-container { position: relative; }
+        .multi-select-container.open .multi-select-dropdown { display: block; }
+        
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .loading-spinner { width: 60px; height: 60px; border: 4px solid #f3f4f6; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-6">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-white text-lg font-medium">Loading data from OneDrive...</p>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                <i data-lucide="activity" class="text-blue-600 w-8 h-8"></i>
+                GHR Impact Manager
+            </h1>
+            <p class="text-slate-500 mt-1">Intelligent Markets and Coverage Team Checklist</p>
+        </div>
+        
+        <!-- Controls -->
+        <div class="flex flex-wrap items-center gap-3">
+            
+            <!-- Filters -->
+            <div class="multi-select-container w-40" id="systemFilterContainer">
+                <button onclick="toggleDropdown('systemFilterContainer')" class="w-full flex items-center justify-between bg-white border border-slate-300 rounded-md px-3 py-2 text-sm font-medium shadow-sm">
+                    <span class="truncate" id="systemFilterLabel">All Systems</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                </button>
+                <div class="multi-select-dropdown p-2" id="systemFilterList"></div>
+            </div>
+
+            <div class="multi-select-container w-48" id="facilityFilterContainer">
+                <button onclick="toggleDropdown('facilityFilterContainer')" class="w-full flex items-center justify-between bg-white border border-slate-300 rounded-md px-3 py-2 text-sm font-medium shadow-sm">
+                    <span class="truncate" id="facilityFilterLabel">All Facilities</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                </button>
+                <div class="multi-select-dropdown p-2" id="facilityFilterList"></div>
+            </div>
+
+            <div class="multi-select-container w-64" id="categoryFilterContainer">
+                <button onclick="toggleDropdown('categoryFilterContainer')" class="w-full flex items-center justify-between bg-white border border-slate-300 rounded-md px-3 py-2 text-sm font-medium shadow-sm">
+                    <span class="truncate" id="categoryFilterLabel">All Categories</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                </button>
+                <div class="multi-select-dropdown p-2" id="categoryFilterList"></div>
+            </div>
+
+            <!-- Refresh Button -->
+            <button onclick="loadDataFromOneDrive()" id="refreshBtn" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md shadow-sm text-sm font-medium transition-colors">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh Data
+            </button>
+            
+            <!-- Edit Source File Button -->
+            <button onclick="window.open(ONEDRIVE_EDIT_URL, '_blank')" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md shadow-sm text-sm font-medium transition-colors">
+                <i data-lucide="edit" class="w-4 h-4"></i> Edit Source File
+            </button>
+        </div>
+    </header>
+
+    <!-- KPI CARDS CONTAINER (Visible in List View) -->
+    <div id="kpiContainer" class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <!-- Populated by JS -->
+    </div>
+
+    <!-- VIEW TOGGLE & LEGEND -->
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+        <div id="legendContainer" class="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-600 bg-white p-3 rounded-md border border-slate-200 inline-flex shadow-sm">
+            <!-- Populated by JS -->
+        </div>
+        
+        <div class="flex bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+            <button onclick="toggleAppView('list')" id="viewBtn-list" class="px-4 py-1.5 text-xs font-bold rounded-md transition-colors bg-blue-50 text-blue-700 shadow-sm border border-blue-100">List View</button>
+            <button onclick="toggleAppView('gantt')" id="viewBtn-gantt" class="px-4 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700">GANTT</button>
+            <button onclick="toggleAppView('stats')" id="viewBtn-stats" class="px-4 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700">Stats Report</button>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT AREA -->
+    <div id="mainContent">
+        <!-- List View -->
+        <div id="tableView" class="bg-white shadow-lg rounded-lg overflow-hidden border border-slate-200">
+            <div class="grid grid-cols-12 bg-slate-100 p-4 font-bold text-slate-600 border-b border-slate-200 text-sm uppercase tracking-wider">
+                <div class="col-span-1 cursor-pointer hover:text-blue-600 select-none flex items-center" onclick="handleSort('id')">
+                    ID <i data-lucide="arrow-up-down" class="sort-icon" id="sort-id"></i>
+                </div>
+                <div class="col-span-1 cursor-pointer hover:text-blue-600 select-none flex items-center" onclick="handleSort('program')">
+                    Category <i data-lucide="arrow-up-down" class="sort-icon" id="sort-program"></i>
+                </div>
+                <div class="col-span-3 cursor-pointer hover:text-blue-600 select-none flex items-center" onclick="handleSort('facility')">
+                    System / Facility / Specialty <i data-lucide="arrow-up-down" class="sort-icon" id="sort-facility"></i>
+                </div>
+                <div class="col-span-1 text-center cursor-pointer hover:text-blue-600 select-none flex items-center justify-center" onclick="handleSort('daysPast')">
+                    Days <i data-lucide="arrow-up-down" class="sort-icon" id="sort-daysPast"></i>
+                </div>
+                <div class="col-span-1 text-center cursor-pointer hover:text-blue-600 select-none flex items-center justify-center" onclick="handleSort('margin')">
+                    Margin <i data-lucide="arrow-up-down" class="sort-icon" id="sort-margin"></i>
+                </div>
+                <div class="col-span-1 text-center cursor-pointer hover:text-blue-600 select-none flex items-center justify-center" onclick="handleSort('impact')">
+                    Impact % <i data-lucide="arrow-up-down" class="sort-icon" id="sort-impact"></i>
+                </div>
+                <div class="col-span-1 text-center cursor-pointer hover:text-blue-600 select-none flex items-center justify-center" onclick="handleSort('ghrSubs')">
+                    Active (G/A) <i data-lucide="arrow-up-down" class="sort-icon" id="sort-ghrSubs"></i>
+                </div>
+                <div class="col-span-2 text-center cursor-pointer hover:text-blue-600 select-none flex items-center justify-center" onclick="handleSort('ghrDeclines')">
+                    Declines (G/A) <i data-lucide="arrow-up-down" class="sort-icon" id="sort-ghrDeclines"></i>
+                </div>
+                <div class="col-span-1 text-center">Action</div>
+            </div>
+            <div id="jobsContainer"></div>
+        </div>
+
+        <!-- Weekly Schedule / Gantt View -->
+        <div id="ganttView" class="hidden bg-white rounded-lg shadow border border-slate-200 overflow-hidden">
+            <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky left-0">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Weekly Schedule - On Assignment</h3>
+                    <p class="text-sm text-slate-500">Trailing 3 Months + Forward 6 Months (9 Month View)</p>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <div class="min-w-[1500px]">
+                    <div id="ganttTableHeader" class="flex border-b border-slate-200 bg-slate-100 text-xs font-bold text-slate-600 sticky top-0 z-10">
+                    </div>
+                    
+                    <div id="ganttTotalsRow" class="flex border-b-2 border-slate-300 bg-slate-50 font-bold text-xs text-blue-700 sticky top-8 z-10">
+                    </div>
+
+                    <div id="ganttRows" class="text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats View -->
+        <div id="statsView" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-lg shadow border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">Weekly Activity Report</h3>
+                <p class="text-sm text-slate-500">Based on data relative to Today: <span id="statsDateDisplay"></span></p>
+            </div>
+            
+            <div id="statsHighlights" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            </div>
+
+            <div id="statsTables" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div id="actionModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-lg shadow-2xl w-96 transform transition-all scale-100 border border-slate-200">
+            <h3 class="text-lg font-bold mb-4 text-slate-800" id="modalTitle">Confirm Action</h3>
+            <p class="text-sm text-slate-600 mb-4" id="modalDesc">Please sign below.</p>
+            <div id="marginInputContainer" class="hidden mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">New Margin %</label>
+                <input type="number" id="modalMarginValue" class="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+            </div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">Your Name</label>
+            <input type="text" id="modalNameInput" class="w-full border border-slate-300 rounded p-2 mb-4 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded text-sm">Cancel</button>
+                <button onclick="confirmAction()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">Confirm & Stamp</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // OneDrive file - direct download format
+        // Make sure the file is set to "Anyone with the link can view"
+        const ONEDRIVE_SHARE_URL = 'https://ghrhealthcare-my.sharepoint.com/:x:/p/mjones/IQCOJ81PbkyRQKZ17r7NO85bAX1dtYC558jNSJFHKgNdCgs?e=HVJe9K';
+        const ONEDRIVE_URL = ONEDRIVE_SHARE_URL + '&download=1';
+        
+        // OneDrive edit link for users to modify the source file
+        const ONEDRIVE_EDIT_URL = ONEDRIVE_SHARE_URL;
+        
+        // Alternative: Add a backup file input for manual upload
+        const USE_MANUAL_UPLOAD = false;
+
+        // Helper Functions
+        function calculateDateDiff(startStr, endStr = null) {
+            if(!startStr) return 0;
+            const start = new Date(startStr);
+            const end = endStr ? new Date(endStr) : new Date(CURRENT_DATE); 
+            if (isNaN(start.getTime())) return 0;
+            if (endStr && isNaN(new Date(endStr).getTime())) return 0;
+
+            const diffTime = Math.abs(end - start);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        function calculateImpactPercent(levers) {
+            const total = Object.keys(levers).length;
+            const completed = Object.values(levers).filter(l => l.done).length;
+            return total ? Math.round((completed / total) * 100) : 0;
+        }
+
+        function getAgingColorClasses(days, system, category) {
+            if (category && (category.toLowerCase().includes('permanent') || category.toLowerCase().includes('perm') || category.toLowerCase().includes('physician'))) {
+                return 'bg-slate-100 text-black border-slate-200'; 
+            }
+            
+            const rules = AGING_RULES[system] || AGING_RULES['default'];
+            const { yellow, red, darkRed } = rules.thresholds;
+            
+            if (days >= darkRed) return 'bg-red-800 text-white border-red-900'; 
+            if (days >= red) return 'bg-[#EF4444] text-white border-red-600';  
+            if (days >= yellow) return 'bg-[#FACC15] text-white border-yellow-600'; 
+            return 'bg-[#22C55E] text-white border-green-600'; 
+        }
+
+        function inferSystem(fac) {
+            if(!fac) return 'Other';
+            const f = fac.toLowerCase();
+            
+            if(f.includes('capital') || f.includes('hopewell') || f.includes('deborah') || f.includes('east trenton')) return 'Capital Health';
+            if(f.includes('cooper') || f.includes('cape regional') || f.includes('moorestown')) return 'Cooper';
+            if(f.includes('redeemer')) return 'Holy Redeemer';
+            if(f.includes('hunterdon')) return 'Hunterdon';
+            if(f.includes('inspira')) return 'Inspira';
+            if(f.includes('richmond')) return 'RUMC';
+            if(f.includes('st. luke') || f.includes('sellersville') || f.includes('quakertown') || f.includes('harleysville')) return 'St Lukes';
+            if(f.includes('penn') || f.includes('lancaster') || f.includes('chester county')) return 'UPHS';
+            
+            return 'Other';
+        }
+
+        window.toggleCandidateView = function(jobId, view) {
+            appState.rowState[jobId] = view; 
+            renderApp(); 
+        }
+
+        window.showDeclineAnalysis = function(jobId) {
+            const job = appState.jobs.find(j => j.id === String(jobId));
+            if (!job) return;
+
+            const reasons = {};
+            job.candidates.filter(c => c.isDeclined).forEach(c => {
+                const reason = c.declineReason || "Unspecified";
+                reasons[reason] = (reasons[reason] || 0) + 1;
+            });
+
+            let summary = Object.entries(reasons).map(([r, count]) => `• ${r}: ${count}`).join('\n');
+            if(!summary) summary = "No specific decline reasons recorded.";
+
+            alert(`Decline Analysis for Job #${jobId}:\n\n${summary}`);
+        }
+
+        const LEVER_LABELS = {
+            relaxRequirements: 'Relax Requirements', adjStartPeriod: 'Adjusted Start Period', 
+            flex48: 'Flex 48hr Schedule', hotJob: 'Hot Job Promotion', payAdj: 'Pay/Margin Adjustment', 
+            recruiterIncentive: 'Recruiter Incentive', additionalRecruiter: 'Additional Recruiter Support',
+            dynamicPay: 'Dynamic Pay Increase'
+        };
+
+        const AGING_RULES = {
+            'Inspira': { labels: ['1-5', '6-10', '11-15', '16+'], thresholds: { yellow: 6, red: 11, darkRed: 16 } },
+            'Capital Health': { labels: ['1-5', '6-10', '11-14', '15+'], thresholds: { yellow: 6, red: 11, darkRed: 15 } },
+            'default': { labels: ['1-5', '6-10', '11-15', '16+'], thresholds: { yellow: 6, red: 11, darkRed: 16 } }
+        };
+
+        const CURRENT_DATE = new Date('2025-12-04'); 
+
+        let appState = {
+            jobs: [], 
+            activeContracts: [], 
+            upcomingStarts: [], 
+            pendingOffers: [], 
+            extensions: [], 
+            
+            filters: {
+                systems: new Set(),
+                facilities: new Set(),
+                categories: new Set()
+            },
+            
+            currentView: 'list',
+            expandedRows: [],
+            rowState: {},
+            sortConfig: { key: 'daysPast', direction: 'desc', isNumeric: true },
+            modal: { isOpen: false, type: null, jobId: null, leverKey: null, value: null }
+        };
+
+        // Load Data from OneDrive
+        async function loadDataFromOneDrive() {
+            const overlay = document.getElementById('loadingOverlay');
+            const btn = document.getElementById('refreshBtn');
+            
+            overlay.style.display = 'flex';
+            if(btn) {
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Loading...`;
+                lucide.createIcons();
+            }
+
+            try {
+                console.log('Fetching from Google Drive:', ONEDRIVE_URL);
+                
+                const response = await fetch(ONEDRIVE_URL, {
+                    method: 'GET',
+                    redirect: 'follow',
+                    credentials: 'omit'
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response URL:', response.url);
+                console.log('Response type:', response.type);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+                
+                // Check if we got HTML instead of Excel file
+                if (contentType && contentType.includes('text/html')) {
+                    console.error('Received HTML instead of Excel file');
+                    throw new Error('Google Drive returned HTML (login page). File may not be publicly accessible.');
+                }
+                
+                const data = await response.arrayBuffer();
+                
+                console.log('File loaded, size:', data.byteLength, 'bytes');
+                
+                if (data.byteLength === 0) {
+                    throw new Error('Received empty file');
+                }
+                
+                // Check if it's a valid Excel file
+                const uint8View = new Uint8Array(data);
+                const isPKZip = uint8View[0] === 0x50 && uint8View[1] === 0x4B;
+                
+                console.log('First 20 bytes:', Array.from(uint8View.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                
+                if (!isPKZip) {
+                    console.error('File does not appear to be Excel format');
+                    
+                    // Try to decode as text to see what we got
+                    const textDecoder = new TextDecoder();
+                    const preview = textDecoder.decode(uint8View.slice(0, 500));
+                    console.error('File preview:', preview);
+                    
+                    throw new Error('Downloaded file is not valid Excel format. Check console for details.');
+                }
+                
+                const workbook = XLSX.read(data, { cellDates: true, type: 'array' });
+                
+                console.log('Workbook parsed successfully');
+                console.log('Sheet names:', workbook.SheetNames);
+                
+                if (workbook.SheetNames.length === 0) {
+                    throw new Error('Workbook contains no sheets');
+                }
+                
+                await processWorkbook(workbook);
+                
+                overlay.style.display = 'none';
+                if(btn) {
+                    btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> Data Loaded`;
+                    setTimeout(() => {
+                        btn.innerHTML = `<i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh Data`;
+                        lucide.createIcons();
+                    }, 2000);
+                    lucide.createIcons();
+                }
+                
+            } catch (err) {
+                overlay.style.display = 'none';
+                
+                console.error('Full error details:', err);
+                console.error('Error stack:', err.stack);
+                
+                let errorMsg = "Failed to load data from Google Drive.\n\n";
+                errorMsg += "Error: " + err.message + "\n\n";
+                
+                if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
+                    errorMsg += "CORS or Network Issue\n\n";
+                    errorMsg += "Possible causes:\n";
+                    errorMsg += "• File is not set to 'Anyone with the link can view'\n";
+                    errorMsg += "• Google Drive CORS restrictions\n";
+                    errorMsg += "• Network connectivity issue\n\n";
+                    errorMsg += "Try:\n";
+                    errorMsg += "1. Make file publicly accessible in Google Drive\n";
+                    errorMsg += "2. Check browser console (F12) for details\n";
+                    errorMsg += "3. Use 'Edit Source File' to verify file is accessible";
+                } else if (err.message.includes('HTML') || err.message.includes('login page')) {
+                    errorMsg += "Google Drive is requiring authentication.\n\n";
+                    errorMsg += "To fix:\n";
+                    errorMsg += "1. Open Google Drive file\n";
+                    errorMsg += "2. Click 'Share' button\n";
+                    errorMsg += "3. Change to 'Anyone with the link'\n";
+                    errorMsg += "4. Set permission to 'Viewer'\n";
+                    errorMsg += "5. Make sure 'Restrict access' is OFF";
+                } else if (err.message.includes('not valid Excel')) {
+                    errorMsg += "The file downloaded but is not in Excel format.\n\n";
+                    errorMsg += "Check browser console (F12) for file preview.\n";
+                    errorMsg += "The file may be in a different format or corrupted.";
+                }
+                
+                errorMsg += "\n\nOpen browser console (F12) for technical details.";
+                
+                alert(errorMsg);
+                
+                if(btn) {
+                    btn.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4"></i> Load Failed`;
+                    setTimeout(() => {
+                        btn.innerHTML = `<i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh Data`;
+                        lucide.createIcons();
+                    }, 5000);
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        // Manual file upload handler (removed from UI but kept for reference)
+        window.processFile = async function(input) {
+            if (input.files.length === 0) return;
+            const file = input.files[0];
+            const overlay = document.getElementById('loadingOverlay');
+            
+            overlay.style.display = 'flex';
+
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { cellDates: true });
+                
+                await processWorkbook(workbook);
+                
+                overlay.style.display = 'none';
+
+            } catch (err) {
+                overlay.style.display = 'none';
+                alert("Error parsing file: " + err.message);
+                console.error(err);
+            }
+        }
+
+        async function processWorkbook(workbook) {
+            const getSheetData = (nameKeys) => {
+                const sheetName = workbook.SheetNames.find(n => nameKeys.some(k => n.toLowerCase().includes(k.toLowerCase())));
+                return sheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]) : [];
+            };
+
+            // 1. Open Positions
+            const openPosRaw = getSheetData(['Open Positions', 'Positions']);
+            const jobsMap = new Map();
+            
+            openPosRaw.forEach(row => {
+                const getVal = (k) => row[Object.keys(row).find(key => k.some(x => key.toLowerCase().includes(x.toLowerCase())))];
+                const id = String(getVal(['Position ID', 'Job ID']) || '').trim();
+                if(!id) return;
+
+                const dateAdded = getVal(['Date Added', 'Created']) || new Date();
+                const program = getVal(['Program', 'Unit', 'Dept']) || 'General';
+                const isFlex48 = String(program).includes('48');
+                
+                const initialLevers = Object.keys(LEVER_LABELS).reduce((acc, k) => ({...acc, [k]: {done: false}}), {});
+                if(isFlex48) initialLevers['flex48'] = { done: true, user: 'System', time: 'Auto' };
+
+                jobsMap.set(id, {
+                    id,
+                    system: inferSystem(getVal(['Facility']) || ''),
+                    facility: getVal(['Facility']) || 'Unknown',
+                    program: program,
+                    specialty: getVal(['Specialty']) || 'General',
+                    dateAdded: dateAdded,
+                    daysPast: Math.ceil(Math.abs(CURRENT_DATE - new Date(dateAdded)) / (1000 * 60 * 60 * 24)),
+                    billRate: parseFloat(getVal(['Bill Rate']) || 0).toFixed(2),
+                    margin: parseFloat(getVal(['Margin']) || 15).toFixed(1),
+                    hiringManager: getVal(['Hiring Manager']) || 'Unknown',
+                    status: getVal(['Status']) || 'Open',
+                    ghrSubs: 0, avSubs: 0, ghrDeclines: 0, avDeclines: 0,
+                    candidates: [],
+                    levers: initialLevers
+                });
+            });
+
+            // 2. Submissions
+            const subsRaw = getSheetData(['Submission', 'Candidate']);
+            subsRaw.forEach(row => {
+                const getVal = (k) => row[Object.keys(row).find(key => k.some(x => key.toLowerCase().includes(x.toLowerCase())))];
+                const id = String(getVal(['Contract Assignment ID', 'Position ID']) || '').trim();
+                const job = jobsMap.get(id);
+                
+                if (job) {
+                    const agency = getVal(['Agency']) || 'Unknown';
+                    const isGHR = agency.toLowerCase().includes('ghr') || agency.toLowerCase().includes('internal');
+                    const status = getVal(['Status']) || 'Submitted';
+                    
+                    const hospDeclineDate = getVal(['Hospital Decline Date']);
+                    const hospDeclineReason = getVal(['Hospital Decline Reason']);
+                    const agDeclineDate = getVal(['Agency Decline Date']);
+                    const agDeclineReason = getVal(['Reason', 'Agency Decline Reason']);
+
+                    const isDeclined = status.toLowerCase().includes('decline') || 
+                                       status.toLowerCase().includes('retract') || 
+                                       status.toLowerCase().includes('reject') ||
+                                       (hospDeclineDate || agDeclineDate);
+                    
+                    let declineReason = hospDeclineReason || agDeclineReason || "";
+
+                    if(isDeclined) { isGHR ? job.ghrDeclines++ : job.avDeclines++; }
+                    else { isGHR ? job.ghrSubs++ : job.avSubs++; }
+
+                    const subDate = getVal(['Submission Date', 'Date']);
+                    const offerDate = getVal(['Offer Date']);
+
+                    job.candidates.push({
+                        name: getVal(['Professional']) || 'Candidate',
+                        agency, status, isDeclined, declineReason: declineReason,
+                        date: subDate ? new Date(subDate).toLocaleDateString() : 'N/A',
+                        offerDate: offerDate ? new Date(offerDate).toLocaleDateString() : null,
+                        reqReason: getVal(['Requisition Reason'])
+                    });
+                }
+            });
+
+            appState.jobs = Array.from(jobsMap.values());
+
+            // 3. Load Other Tabs
+            appState.activeContracts = getSheetData(['On Assignment', 'Active']);
+            appState.upcomingStarts = getSheetData(['New Upcoming', 'Starts']);
+            appState.pendingOffers = getSheetData(['Pending Offer']);
+            appState.extensions = getSheetData(['Extension']);
+
+            appState.filters.systems.clear();
+            appState.filters.facilities.clear();
+            appState.filters.categories.clear();
+            
+            renderApp();
+        }
+
+        function init() {
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.multi-select-container')) {
+                    document.querySelectorAll('.multi-select-container').forEach(el => el.classList.remove('open'));
+                }
+            });
+            document.getElementById('statsDateDisplay').innerText = CURRENT_DATE.toLocaleDateString();
+            
+            // Load data on init
+            loadDataFromOneDrive();
+        }
+
+        window.toggleDropdown = function(id) {
+            const el = document.getElementById(id);
+            const isOpen = el.classList.contains('open');
+            document.querySelectorAll('.multi-select-container').forEach(d => d.classList.remove('open'));
+            if (!isOpen) el.classList.add('open');
+        }
+
+        window.updateFilterState = function(type, value, checked) {
+            if (value === 'All') {
+                appState.filters[type].clear();
+            } else {
+                if (checked) appState.filters[type].add(value);
+                else appState.filters[type].delete(value);
+            }
+            renderApp();
+        }
+
+        function populateMultiSelect(id, options, type, labelId) {
+            const container = document.getElementById(id);
+            const selectedSet = appState.filters[type];
+            const isAll = selectedSet.size === 0;
+            const labelEl = document.getElementById(labelId);
+            if (isAll) labelEl.innerText = `All ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+            else if (selectedSet.size === 1) labelEl.innerText = Array.from(selectedSet)[0];
+            else labelEl.innerText = `${selectedSet.size} Selected`;
+
+            let html = `
+                <label class="flex items-center gap-2 p-2 hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" ${isAll ? 'checked' : ''} onchange="updateFilterState('${type}', 'All', this.checked)" class="rounded text-blue-600">
+                    <span class="text-sm font-bold">Select All</span>
+                </label>
+                <div class="h-px bg-slate-200 my-1"></div>
+            `;
+            
+            options.sort().forEach(opt => {
+                const isChecked = selectedSet.has(opt);
+                html += `
+                    <label class="flex items-center gap-2 p-2 hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" value="${opt}" ${isChecked ? 'checked' : ''} onchange="updateFilterState('${type}', '${opt}', this.checked)" class="rounded text-blue-600">
+                        <span class="text-sm">${opt}</span>
+                    </label>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function getFilteredJobs() {
+            return appState.jobs.filter(job => {
+                const sysMatch = appState.filters.systems.size === 0 || appState.filters.systems.has(job.system);
+                const facMatch = appState.filters.facilities.size === 0 || appState.filters.facilities.has(job.facility);
+                const catMatch = appState.filters.categories.size === 0 || appState.filters.categories.has(job.program);
+                return sysMatch && facMatch && catMatch;
+            });
+        }
+
+        function getFilteredDataset(dataset, facilityField = 'Facility Name') {
+             return dataset.filter(row => {
+                const sys = inferSystem(row[facilityField] || row['Facility'] || '');
+                const fac = row[facilityField] || row['Facility'] || '';
+                
+                const sysMatch = appState.filters.systems.size === 0 || appState.filters.systems.has(sys);
+                const facMatch = appState.filters.facilities.size === 0 || appState.filters.facilities.has(fac);
+                return sysMatch && facMatch;
+            });
+        }
+
+        window.toggleAppView = function(v) {
+            appState.currentView = v;
+            document.getElementById('tableView').classList.toggle('hidden', v !== 'list');
+            document.getElementById('statsView').classList.toggle('hidden', v !== 'stats');
+            document.getElementById('ganttView').classList.toggle('hidden', v !== 'gantt');
+            document.getElementById('kpiContainer').classList.toggle('hidden', v !== 'list'); 
+            
+            document.getElementById('viewBtn-list').className = v === 'list' ? 'px-4 py-1.5 text-xs font-bold rounded-md transition-colors bg-blue-50 text-blue-700 shadow-sm border border-blue-100' : 'px-4 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700';
+            document.getElementById('viewBtn-stats').className = v === 'stats' ? 'px-4 py-1.5 text-xs font-bold rounded-md transition-colors bg-blue-50 text-blue-700 shadow-sm border border-blue-100' : 'px-4 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700';
+            document.getElementById('viewBtn-gantt').className = v === 'gantt' ? 'px-4 py-1.5 text-xs font-bold rounded-md transition-colors bg-blue-50 text-blue-700 shadow-sm border border-blue-100' : 'px-4 py-1.5 text-xs font-bold rounded-md transition-colors text-slate-500 hover:text-slate-700';
+
+            renderApp();
+        }
+        
+        window.toggleRow = function(id) {
+            if(appState.expandedRows.includes(id)) appState.expandedRows = appState.expandedRows.filter(x => x!==id);
+            else appState.expandedRows.push(id);
+            if (!appState.rowState[id]) appState.rowState[id] = 'active'; 
+            renderApp();
+        }
+
+        window.openLeverModal = function(id, key, status) {
+            if(status) { 
+                appState.jobs.find(j=>j.id===id).levers[key].done = false; 
+                renderApp(); 
+            } else {
+                appState.modal = { isOpen: true, type:'lever', jobId: id, leverKey: key };
+                document.getElementById('actionModal').classList.remove('hidden');
+            }
+        }
+        window.openMarginModal = function(id, val) {
+            appState.modal = { isOpen: true, type:'margin', jobId: id, value: val };
+            document.getElementById('marginInputContainer').classList.remove('hidden');
+            document.getElementById('modalMarginValue').value = val;
+            document.getElementById('actionModal').classList.remove('hidden');
+        }
+        window.closeModal = function() { document.getElementById('actionModal').classList.add('hidden'); }
+        window.confirmAction = function() {
+            const name = document.getElementById('modalNameInput').value;
+            const job = appState.jobs.find(j => j.id === appState.modal.jobId);
+            if(appState.modal.type === 'lever') {
+                job.levers[appState.modal.leverKey] = { done: true, user: name + ' - ' + new Date().toLocaleString(), time: new Date().toLocaleString() };
+            } else {
+                job.margin = document.getElementById('modalMarginValue').value;
+            }
+            closeModal();
+            renderApp();
+        }
+
+        window.handleSort = function(key) {
+            const numericKeys = ['id', 'daysPast', 'margin', 'impact', 'ghrSubs', 'ghrDeclines'];
+            
+            if (appState.sortConfig.key === key) {
+                appState.sortConfig.direction = appState.sortConfig.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                appState.sortConfig.key = key;
+                appState.sortConfig.direction = 'desc';
+            }
+            
+            renderApp();
+        }
+
+        function getFilteredAndSortedJobs() {
+            let filtered = appState.jobs.filter(job => {
+                const sysMatch = appState.filters.systems.size === 0 || appState.filters.systems.has(job.system);
+                const facMatch = appState.filters.facilities.size === 0 || appState.filters.facilities.has(job.facility);
+                const catMatch = appState.filters.categories.size === 0 || appState.filters.categories.has(job.program);
+                return sysMatch && facMatch && catMatch;
+            });
+
+            const { key, direction } = appState.sortConfig;
+            
+            filtered.sort((a, b) => {
+                let valA, valB;
+                
+                if (key === 'impact') {
+                    valA = calculateImpactPercent(a.levers);
+                    valB = calculateImpactPercent(b.levers);
+                } else if (key === 'ghrSubs') {
+                    valA = a.ghrSubs + a.avSubs;
+                    valB = b.ghrSubs + b.avSubs;
+                } else if (key === 'ghrDeclines') {
+                    valA = a.ghrDeclines + a.avDeclines;
+                    valB = b.ghrDeclines + b.avDeclines;
+                } else {
+                    valA = a[key];
+                    valB = b[key];
+                }
+
+                const numA = parseFloat(valA);
+                const numB = parseFloat(valB);
+                
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    if (numA < numB) return direction === 'asc' ? -1 : 1;
+                    if (numA > numB) return direction === 'asc' ? 1 : -1;
+                    return 0;
+                }
+
+                const strA = String(valA).toLowerCase();
+                const strB = String(valB).toLowerCase();
+                if (strA < strB) return direction === 'asc' ? -1 : 1;
+                if (strA > strB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+            return filtered;
+        }
+
+        function renderApp() {
+            const visibleJobs = getFilteredAndSortedJobs(); 
+            const allJobs = appState.jobs;
+            populateMultiSelect('systemFilterList', [...new Set(allJobs.map(j => j.system))], 'systems', 'systemFilterLabel');
+            populateMultiSelect('facilityFilterList', [...new Set(visibleJobs.map(j => j.facility))], 'facilities', 'facilityFilterLabel'); 
+            populateMultiSelect('categoryFilterList', [...new Set(allJobs.map(j => j.program))], 'categories', 'categoryFilterLabel');
+
+            if(appState.currentView === 'list') {
+                renderKPIs(visibleJobs);
+                renderLegend();
+                renderTable(visibleJobs);
+            } else if (appState.currentView === 'stats') {
+                renderStatsView();
+            } else if (appState.currentView === 'gantt') {
+                renderGanttView();
+            }
+            lucide.createIcons();
+        }
+
+        function getWeeksBuckets() {
+            const weeks = [];
+            const today = new Date(CURRENT_DATE);
+            
+            for(let i = 3; i >= 0; i--) {
+                const start = new Date(today);
+                start.setDate(today.getDate() - (i * 7));
+                const end = new Date(start);
+                end.setDate(start.getDate() + 6);
+                
+                const label = i === 0 ? 'This Week' : i === 1 ? 'Last Week' : `${i} Weeks Ago`;
+                weeks.push({ start, end, label });
+            }
+            
+            return weeks;
+        }
+
+        function calculateWeeklyStats(dataset, dateField, agencyField, categoryFn = null) {
+            const weeks = getWeeksBuckets();
+            const stats = {};
+            
+            weeks.forEach(w => stats[w.label] = {});
+            
+            dataset.forEach(row => {
+                const date = new Date(row[dateField] || row.dateAdded);
+                if (isNaN(date.getTime())) return;
+                
+                const week = weeks.find(w => date >= w.start && date <= w.end);
+                if (!week) return;
+                
+                let category;
+                if (categoryFn) {
+                    category = categoryFn(row);
+                } else if (agencyField) {
+                    const ag = row[agencyField] || '';
+                    category = ag;
+                } else {
+                    category = 'Total';
+                }
+                
+                stats[week.label][category] = (stats[week.label][category] || 0) + 1;
+            });
+            
+            return stats;
+        }
+
+        function renderStatsView() {
+            const container = document.getElementById('statsTables');
+            const highlights = document.getElementById('statsHighlights');
+            
+            const prestartTotal = appState.upcomingStarts.length;
+            const offersTotal = appState.pendingOffers.length;
+            const extTotal = appState.extensions.length;
+            const openPosTotal = appState.jobs.length;
+
+            const htmlHighlights = `
+                <div class="bg-white p-4 rounded border border-slate-200 shadow-sm flex flex-col items-center">
+                    <span class="text-xs text-slate-500 uppercase font-bold">New Pre-Starts</span>
+                    <span class="text-3xl font-bold text-slate-800 my-1">${prestartTotal}</span>
+                    <span class="text-xs text-green-600 font-bold flex items-center"><i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +5% vs prev</span>
+                </div>
+                 <div class="bg-white p-4 rounded border border-slate-200 shadow-sm flex flex-col items-center">
+                    <span class="text-xs text-slate-500 uppercase font-bold">New Offers</span>
+                    <span class="text-3xl font-bold text-slate-800 my-1">${offersTotal}</span>
+                    <span class="text-xs text-red-500 font-bold flex items-center"><i data-lucide="trending-down" class="w-3 h-3 mr-1"></i> -2% vs prev</span>
+                </div>
+                 <div class="bg-white p-4 rounded border border-slate-200 shadow-sm flex flex-col items-center">
+                    <span class="text-xs text-slate-500 uppercase font-bold">Extensions</span>
+                    <span class="text-3xl font-bold text-slate-800 my-1">${extTotal}</span>
+                    <span class="text-xs text-slate-400 font-bold flex items-center"> -- Flat</span>
+                </div>
+                 <div class="bg-white p-4 rounded border border-slate-200 shadow-sm flex flex-col items-center">
+                    <span class="text-xs text-slate-500 uppercase font-bold">Open Positions</span>
+                    <span class="text-3xl font-bold text-slate-800 my-1">${openPosTotal}</span>
+                    <span class="text-xs text-green-600 font-bold flex items-center"><i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +12% vs prev</span>
+                </div>
+            `;
+            highlights.innerHTML = htmlHighlights;
+            
+            const weeksBuckets = getWeeksBuckets();
+            const fulfillmentData = {}; 
+            
+            const filteredContracts = getFilteredDataset(appState.activeContracts, 'Facility Name');
+
+            weeksBuckets.forEach(week => {
+                fulfillmentData[week.label] = { ghr: 0, av: 0 };
+                
+                filteredContracts.forEach(contract => {
+                    const start = new Date(contract['Start Date']);
+                    const end = new Date(contract['End Date']);
+                    
+                    if (start <= week.end && end >= week.start) {
+                        const agency = (contract['Agency'] || '').toLowerCase();
+                        if (agency.includes('ghr')) {
+                            fulfillmentData[week.label].ghr++;
+                        } else {
+                            fulfillmentData[week.label].av++;
+                        }
+                    }
+                });
+            });
+
+            let html = `
+                <div class="bg-white p-4 rounded border shadow-sm">
+                    <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">GHR Fulfillment (On Assignment)</h4>
+                    <table class="w-full text-sm text-left">
+                        <thead><tr class="text-slate-500 border-b"><th class="pb-2 text-left">Metric</th>${weeksBuckets.map(w => `<th class="pb-2 text-right">${w.label}</th>`).join('')}</tr></thead>
+                        <tbody>
+                            <tr class="border-b hover:bg-slate-50">
+                                <td class="py-2 font-medium text-left">Total On Assignment</td>
+                                ${weeksBuckets.map(w => {
+                                    const t = fulfillmentData[w.label].ghr + fulfillmentData[w.label].av;
+                                    return `<td class="py-2 text-right font-bold">${t}</td>`;
+                                }).join('')}
+                            </tr>
+                            <tr class="border-b hover:bg-slate-50">
+                                <td class="py-2 font-medium text-left">GHR vs Total</td>
+                                ${weeksBuckets.map(w => {
+                                    const t = fulfillmentData[w.label].ghr + fulfillmentData[w.label].av;
+                                    const pct = t ? Math.round((fulfillmentData[w.label].ghr / t)*100) : 0;
+                                    return `<td class="py-2 text-right text-blue-600">${fulfillmentData[w.label].ghr} (${pct}%)</td>`;
+                                }).join('')}
+                            </tr>
+                             <tr class="border-b hover:bg-slate-50 text-xs text-slate-500">
+                                <td class="py-1 pl-4 text-left">GHR Count</td>
+                                ${weeksBuckets.map(w => `<td class="py-1 text-right">${fulfillmentData[w.label].ghr}</td>`).join('')}
+                            </tr>
+                             <tr class="border-b hover:bg-slate-50 text-xs text-slate-500">
+                                <td class="py-1 pl-4 text-left">AV Count</td>
+                                ${weeksBuckets.map(w => `<td class="py-1 text-right">${fulfillmentData[w.label].av}</td>`).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            const prestartStats = calculateWeeklyStats(appState.upcomingStarts, 'Start Date', 'Agency');
+            const offerStats = calculateWeeklyStats(appState.pendingOffers, 'Date Added', 'Agency', (row) => {
+                const ag = row['Agency'] || '';
+                return ag.toLowerCase().includes('ghr') ? 'GHR' : 'AV';
+            });
+            const extStats = calculateWeeklyStats(appState.extensions, 'Date Added', 'Agency', (row) => {
+                const ag = row['Agency'] || '';
+                return ag.toLowerCase().includes('ghr') ? 'GHR' : 'AV';
+            });
+            const openPosStats = calculateWeeklyStats(appState.jobs, 'dateAdded', null, (row) => {
+                const prog = row.program || '';
+                if(prog.includes('Nursing')) return 'Nursing';
+                if(prog.includes('Allied')) return 'Allied';
+                if(prog.includes('Non')) return 'Non-Clinical';
+                if(prog.includes('Physician')) return 'Physician';
+                if(prog.includes('Perm')) return 'Perm';
+                return 'Other';
+            });
+
+            html += renderGenericStatsTable('Awarded Not Started (Pre-Starts)', prestartStats, ['GHR Acute', 'GHR Allied', 'GHR Travel', 'Planet Healthcare', 'AV']);
+            html += renderGenericStatsTable('New Offers', offerStats, ['GHR', 'AV']);
+            html += renderGenericStatsTable('Extensions Offers', extStats, ['GHR', 'AV']);
+            html += renderGenericStatsTable('Open Requisitions', openPosStats, ['Nursing', 'Allied', 'Non-Clinical', 'Perm', 'Physician']);
+            
+            container.innerHTML = html;
+        }
+
+        function renderGenericStatsTable(title, data, categories) {
+            const weeks = getWeeksBuckets(); 
+            const totals = {};
+            weeks.forEach(w => {
+                totals[w.label] = categories.reduce((sum, cat) => sum + (data[w.label][cat] || 0), 0);
+            });
+
+            return `
+                <div class="bg-white p-4 rounded border shadow-sm">
+                    <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">${title}</h4>
+                    <table class="w-full text-sm text-left">
+                        <thead>
+                            <tr class="text-slate-500 border-b">
+                                <th class="pb-2 w-1/3 text-left">Category</th>
+                                ${weeks.map(w => `<th class="pb-2 text-right w-1/6">${w.label}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${categories.map(cat => `
+                                <tr class="border-b last:border-0 hover:bg-slate-50">
+                                    <td class="py-2 font-medium text-left">${cat}</td>
+                                    ${weeks.map(w => `<td class="py-2 text-right">${data[w.label][cat] || 0}</td>`).join('')}
+                                </tr>
+                            `).join('')}
+                            <tr class="bg-slate-100 font-bold border-t-2 border-slate-200">
+                                <td class="py-2 pl-2 text-left">Grand Total</td>
+                                ${weeks.map(w => `<td class="py-2 text-right">${totals[w.label]}</td>`).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderGanttView() {
+            const header = document.getElementById('ganttTableHeader');
+            const totals = document.getElementById('ganttTotalsRow');
+            const rows = document.getElementById('ganttRows');
+            
+            const data = getFilteredDataset(appState.activeContracts, 'Facility Name');
+            if(data.length === 0) { rows.innerHTML = '<div class="p-8">No Active Contracts Found for Selection</div>'; return; }
+
+            data.sort((a,b) => {
+                const sA = inferSystem(a['Facility Name'] || ''), sB = inferSystem(b['Facility Name'] || '');
+                if(sA !== sB) return sA.localeCompare(sB);
+                const fA = a['Facility Name'] || '', fB = b['Facility Name'] || '';
+                if(fA !== fB) return fA.localeCompare(fB);
+                return (a['Professional Name']||'').localeCompare(b['Professional Name']||'');
+            });
+
+            const weeks = [];
+            let start = new Date(CURRENT_DATE); 
+            start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+            start.setDate(start.getDate() - (12 * 7));
+            
+            for(let i=0; i<36; i++) {
+                let wStart = new Date(start);
+                wStart.setDate(start.getDate() + (i*7));
+                let wEnd = new Date(wStart); wEnd.setDate(wStart.getDate()+6);
+                weeks.push({ start: wStart, end: wEnd, label: `${wStart.getMonth()+1}/${wStart.getDate()}` });
+            }
+
+            let headerHtml = `<div class="w-64 flex-shrink-0 p-2 border-r">Clinician / Facility</div>`;
+            weeks.forEach(w => headerHtml += `<div class="flex-1 text-center p-2 border-r min-w-[50px] whitespace-nowrap">${w.label}</div>`);
+            header.innerHTML = headerHtml;
+
+            const weeklyCounts = weeks.map(w => {
+                return data.filter(d => {
+                    const s = new Date(d['Start Date']); const e = new Date(d['End Date']);
+                    return s <= w.end && e >= w.start;
+                }).length;
+            });
+
+            let totalsHtml = `<div class="w-64 flex-shrink-0 p-2 border-r">Total Active</div>`;
+            weeklyCounts.forEach(c => totalsHtml += `<div class="flex-1 text-center p-2 border-r min-w-[50px]">${c}</div>`);
+            totals.innerHTML = totalsHtml;
+
+            let rowsHtml = '';
+            data.forEach(d => {
+                const s = new Date(d['Start Date']); const e = new Date(d['End Date']);
+                let rowHtml = `<div class="flex border-b hover:bg-slate-50 items-center h-8">`;
+                rowHtml += `<div class="w-64 flex-shrink-0 p-2 border-r truncate text-xs" title="${d['Professional Name']} - ${d['Facility Name']}">
+                    <span class="font-bold">${d['Professional Name']}</span>
+                    <span class="text-slate-400 ml-1">(${d['Agency']})</span>
+                </div>`;
+                
+                weeks.forEach(w => {
+                    const isActive = s <= w.end && e >= w.start;
+                    rowHtml += `<div class="flex-1 border-r min-w-[50px] flex items-center justify-center">
+                        ${isActive ? '<div class="text-[10px] text-blue-600 font-bold">1</div>' : ''}
+                    </div>`;
+                });
+                rowHtml += `</div>`;
+                rowsHtml += rowHtml;
+            });
+            rows.innerHTML = rowsHtml;
+        }
+
+        function renderKPIs(jobs) {
+            const totalJobs = jobs.length;
+            const avgDays = totalJobs ? (jobs.reduce((a,b) => a + b.daysPast, 0) / totalJobs).toFixed(1) : 0;
+            
+            let totalOfferDays = 0, offerCount = 0;
+            jobs.forEach(j => j.candidates.forEach(c => {
+                if(!c.isDeclined && c.offerDate) {
+                    const d = calculateDateDiff(c.date, c.offerDate);
+                    if(d>=0) { totalOfferDays += d; offerCount++; }
+                }
+            }));
+            const avgSubmissionPendingTime = offerCount ? (totalOfferDays/offerCount).toFixed(1) : 0;
+
+            const ghrSubs = jobs.reduce((a,b) => a + b.ghrSubs, 0);
+            const avSubs = jobs.reduce((a,b) => a + b.avSubs, 0);
+            const totalSubs = ghrSubs + avSubs;
+            const ghrPct = totalSubs ? Math.round((ghrSubs/totalSubs)*100) : 0;
+            const avPct = totalSubs ? Math.round((avSubs/totalSubs)*100) : 0;
+            
+            const margin = totalJobs ? (jobs.reduce((a,b) => a + parseFloat(b.margin), 0) / totalJobs).toFixed(1) : 0;
+            
+            const critical = jobs.filter(j => {
+                if(j.program.includes('Perm') || j.program.includes('Physician')) return false;
+                const rules = AGING_RULES[j.system] || AGING_RULES['default'];
+                return j.daysPast >= rules.thresholds.darkRed;
+            }).length;
+
+            const html = `
+               <div class="bg-white p-4 rounded shadow border border-slate-100 flex flex-col justify-between">
+                   <div class="flex justify-between items-start mb-2">
+                       <span class="text-slate-500 text-sm font-medium">Avg Days Open</span>
+                       <div class="has-tooltip"><i data-lucide="clock" class="w-5 h-5 text-purple-500"></i><span class="tooltip">The average age (in days) of all currently open job requisitions.</span></div>
+                   </div>
+                   <div class="text-2xl font-bold text-slate-800">${avgDays}</div>
+               </div>
+               <div class="bg-white p-4 rounded shadow border border-slate-100 flex flex-col justify-between">
+                   <div class="flex justify-between items-start mb-2">
+                       <span class="text-slate-500 text-sm font-medium">Submission Pending Time</span>
+                       <div class="has-tooltip"><i data-lucide="hourglass" class="w-5 h-5 text-orange-500"></i><span class="tooltip">Average number of days a submission sits before turning into an offer.</span></div>
+                   </div>
+                   <div class="text-2xl font-bold text-slate-800">${avgSubmissionPendingTime} Days</div>
+               </div>
+               <div class="bg-white p-4 rounded shadow border border-slate-100 flex flex-col justify-between">
+                   <div class="flex justify-between items-start mb-2">
+                       <span class="text-slate-500 text-sm font-medium">Active Sub Mix (GHR/AV)</span>
+                       <div class="has-tooltip"><i data-lucide="users" class="w-5 h-5 text-blue-500"></i><span class="tooltip">Ratio of active submissions from GHR (Internal) vs Associate Vendors (AV).</span></div>
+                   </div>
+                   <div class="text-2xl font-bold text-slate-800">${ghrPct}% / ${avPct}%</div>
+               </div>
+               <div class="bg-white p-4 rounded shadow border border-slate-100 flex flex-col justify-between">
+                   <div class="flex justify-between items-start mb-2">
+                       <span class="text-slate-500 text-sm font-medium">Avg Margin</span>
+                       <div class="has-tooltip"><i data-lucide="trending-up" class="w-5 h-5 text-green-600"></i><span class="tooltip">Average profit margin percentage across all currently open jobs.</span></div>
+                   </div>
+                   <div class="text-2xl font-bold text-slate-800">${margin}%</div>
+               </div>
+               <div class="bg-white p-4 rounded shadow border border-slate-100 flex flex-col justify-between">
+                   <div class="flex justify-between items-start mb-2">
+                       <span class="text-slate-500 text-sm font-medium">Critical Jobs</span>
+                       <div class="has-tooltip"><i data-lucide="alert-triangle" class="w-5 h-5 text-red-600"></i><span class="tooltip">Number of jobs that have exceeded the "Dark Red" aging threshold for their system.</span></div>
+                   </div>
+                   <div class="text-2xl font-bold text-slate-800">${totalJobs} <span class="text-sm font-normal text-slate-500">Total</span> / <span class="text-red-600">${critical} Critical</span></div>
+               </div>
+            `;
+            document.getElementById('kpiContainer').innerHTML = html;
+        }
+
+        function renderLegend() {
+            const sys = (appState.filters.systems.size === 1) ? Array.from(appState.filters.systems)[0] : 'default';
+            const rules = AGING_RULES[sys] || AGING_RULES['default'];
+            const displaySys = sys === 'default' ? 'Default' : sys;
+
+            document.getElementById('legendContainer').innerHTML = `
+                <span class="font-bold">Aging (${displaySys}):</span> 
+                <span class="bg-[#22C55E] text-white border border-green-600 w-3 h-3 rounded-full inline-block ml-2"></span> ${rules.labels[0]} 
+                <span class="bg-[#FACC15] text-white border border-yellow-600 w-3 h-3 rounded-full inline-block ml-2"></span> ${rules.labels[1]} 
+                <span class="bg-[#EF4444] text-white border border-red-600 w-3 h-3 rounded-full inline-block ml-2"></span> ${rules.labels[2]} 
+                <span class="bg-red-800 text-white border border-red-900 w-3 h-3 rounded-full inline-block ml-2"></span> ${rules.labels[3]}
+            `;
+        }
+
+        function renderTable(jobs) {
+            const container = document.getElementById('jobsContainer');
+            if(jobs.length === 0) { container.innerHTML = '<div class="p-8 text-center text-slate-400">No jobs found</div>'; return; }
+            
+            container.innerHTML = jobs.map(job => {
+                const impact = calculateImpactPercent(job.levers);
+                const color = getAgingColorClasses(job.daysPast, job.system, job.program);
+                const expanded = appState.expandedRows.includes(job.id);
+                const currentView = appState.rowState[job.id] || 'active'; 
+                const activeCandidates = job.candidates.filter(c => !c.isDeclined);
+                const declinedCandidates = job.candidates.filter(c => c.isDeclined);
+                
+                let row = `
+                <div onclick="toggleRow('${job.id}')" class="grid grid-cols-12 p-4 items-center border-b hover:bg-slate-50 cursor-pointer">
+                    <div class="col-span-1"><span class="px-2 py-1 rounded text-xs font-bold ${color}">${job.id}</span></div>
+                    <div class="col-span-1 text-xs truncate font-medium text-slate-700" title="${job.program}">${job.program}</div>
+                    <div class="col-span-3 pr-4 pl-2">
+                        <div class="text-[10px] uppercase font-bold text-slate-400">${job.system}</div>
+                        <div class="font-bold text-sm truncate">${job.facility}</div>
+                        <div class="text-xs text-slate-500 truncate">${job.specialty}</div>
+                    </div>
+                    <div class="col-span-1 text-center">
+                        <span class="inline-block font-bold text-xs ${color.split(' ')[0]} rounded-full w-8 h-8 flex items-center justify-center mx-auto text-white">${job.daysPast}</span>
+                    </div>
+                    <div class="col-span-1 text-center font-bold text-slate-700 hover:text-blue-600 cursor-pointer" onclick="event.stopPropagation(); openMarginModal('${job.id}', '${job.margin}')">${job.margin}%</div>
+                    <div class="col-span-1 text-center font-bold text-slate-700">${impact}%</div>
+                    <div class="col-span-1 text-center font-medium text-slate-700">
+                        <span class="text-blue-600">${job.ghrSubs}</span> <span class="text-slate-300">/</span> <span class="text-blue-600">${job.avSubs}</span>
+                    </div>
+                    <div class="col-span-2 text-center font-medium text-slate-700">
+                        <span class="text-red-500">${job.ghrDeclines}</span> <span class="text-slate-300">/</span> <span class="text-red-500">${job.avDeclines}</span>
+                    </div>
+                    <div class="col-span-1 text-center"><i data-lucide="${expanded ? 'chevron-up' : 'chevron-down'}"></i></div>
+                </div>`;
+
+                if(expanded) {
+                    let recText = "";
+                    let recColor = "bg-slate-100 text-slate-700 border-slate-200"; 
+                    
+                    if (job.daysPast >= (AGING_RULES[job.system] || AGING_RULES.default).thresholds.darkRed) {
+                        recColor = "bg-red-800 text-white border-red-900";
+                        recText = "Order is Aged (Critical). Immediate Action Required: Submit ANY candidate regardless of agency.";
+                    } else if (job.daysPast >= (AGING_RULES[job.system] || AGING_RULES.default).thresholds.red) {
+                        recColor = "bg-[#EF4444] text-white border-red-600";
+                        recText = "Order is Aged (High). Action: Jobs should be open to Associate Vendors (AVs).";
+                    } else if (job.daysPast >= (AGING_RULES[job.system] || AGING_RULES.default).thresholds.yellow) {
+                        recColor = "bg-[#FACC15] text-white border-yellow-600";
+                        recText = "Order is Aged (Warning). Consider opening to AVs and assign date jobs will be opened.";
+                    } else {
+                        recColor = "bg-[#22C55E] text-white border-green-600";
+                        recText = "Order is Fresh. Prioritize GHR submissions flow - keep AV jobs closed.";
+                    }
+
+                    row += `<div class="bg-slate-50 p-6 border-b">
+                        <div class="grid grid-cols-2 gap-8 mb-6">
+                            <div>
+                                <h4 class="font-bold mb-2">Impact Checklist</h4>
+                                <div class="grid grid-cols-2 gap-2">
+                                    ${Object.keys(job.levers).map(k => `
+                                        <div class="border p-2 rounded bg-white flex items-center gap-2 ${job.levers[k].done ? 'border-indigo-500 bg-indigo-50' : ''}">
+                                            <input type="checkbox" ${job.levers[k].done ? 'checked' : ''} onclick="event.stopPropagation(); openLeverModal('${job.id}', '${k}', ${job.levers[k].done})">
+                                            <span class="text-xs">${LEVER_LABELS[k]}</span>
+                                            ${job.levers[k].done ? `<span class="ml-auto text-[10px] text-slate-400">${job.levers[k].user}</span>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-slate-700 flex items-center gap-2"><i data-lucide="briefcase" class="w-5 h-5 text-indigo-600"></i> Candidate Log</h3>
+                                    <div class="flex bg-slate-100 rounded-lg p-1">
+                                        <button onclick="event.stopPropagation(); toggleCandidateView('${job.id}', 'active')" class="px-3 py-1 text-xs font-bold rounded-md transition-colors ${currentView === 'active' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}">Active (${activeCandidates.length})</button>
+                                        <button onclick="event.stopPropagation(); toggleCandidateView('${job.id}', 'declined')" class="px-3 py-1 text-xs font-bold rounded-md transition-colors ${currentView === 'declined' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}">Declined (${declinedCandidates.length})</button>
+                                    </div>
+                                </div>
+                                <div class="bg-white border rounded h-64 overflow-y-auto p-2">
+                                    ${currentView === 'active' ? 
+                                        (activeCandidates.length ? activeCandidates.map(c => {
+                                            const days = calculateDateDiff(c.date);
+                                            const isGHR = c.agency.toLowerCase().includes('ghr');
+                                            const isPlanet = c.agency.toLowerCase().includes('planet');
+                                            const agencyClass = isGHR ? 'text-blue-700 bg-blue-50 font-bold' : (isPlanet ? 'text-purple-700 bg-purple-50 font-bold' : 'text-slate-600 bg-slate-50');
+                                            
+                                            let warning = '';
+                                            if(days >= 15) warning = `<div class="text-[10px] text-red-600 mt-1 font-bold">⚠️ 15+ Days: Identify if candidate is still available/active</div>`;
+                                            else if(days >= 8) warning = `<div class="text-[10px] text-orange-600 mt-1 font-bold">⚠️ 8-14 Days: Advise manager - risk of losing candidate</div>`;
+                                            else if(days >= 7) warning = `<div class="text-[10px] text-yellow-600 mt-1 font-bold">⚠️ 7 Days: Provide update on interview/offer</div>`;
+
+                                            return `
+                                            <div class="flex justify-between text-xs p-2 border-b ${agencyClass} rounded mb-1">
+                                                <div>
+                                                    <span class="block text-sm font-bold">${c.name}</span>
+                                                    <span class="text-[10px] opacity-75">${c.agency}</span>
+                                                    ${warning}
+                                                </div>
+                                                <div class="text-right">
+                                                    <span class="block font-medium">${c.status}</span>
+                                                    <span class="text-[10px] opacity-75">Subbed ${calculateDateDiff(c.date)} days ago</span>
+                                                </div>
+                                            </div>`
+                                        }).join('') : '<div class="text-center py-4 text-slate-400 text-xs">No active candidates</div>')
+                                        : 
+                                        (declinedCandidates.length ? 
+                                            `<div class="mb-2"><button onclick="event.stopPropagation(); showDeclineAnalysis('${job.id}')" class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-200 w-full text-center">View Analysis</button></div>` +
+                                            declinedCandidates.map(c => `
+                                            <div class="flex justify-between text-xs p-2 border-b bg-red-50 text-red-600">
+                                                <div><span class="font-bold line-through">${c.name}</span> (${c.agency})</div>
+                                                <div class="text-[10px] italic">${c.declineReason || 'Declined'}</div>
+                                            </div>`).join('') : '<div class="text-center py-4 text-slate-400 text-xs">No declined candidates</div>')
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-slate-100 p-4 rounded-lg border border-slate-200 shadow-inner">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><i data-lucide="file-text" class="w-3 h-3"></i> Current Status / Notes</h4>
+                                    <span class="text-xs font-bold text-slate-500 bg-white px-2 py-1 rounded border">Hiring Mgr: ${job.hiringManager}</span>
+                                </div>
+                                <p class="text-sm text-slate-700 leading-relaxed">${job.status}</p>
+                            </div>
+                            
+                            <div class="${recColor} p-4 rounded-lg border shadow-inner">
+                                <div class="flex items-start gap-3">
+                                    <div class="bg-white/20 p-2 rounded-full"><i data-lucide="zap" class="w-5 h-5 text-current"></i></div>
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider mb-1">IMPACT Recommendation</h4>
+                                        <p class="text-sm font-medium leading-snug">${recText}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+                return row;
+            }).join('');
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
