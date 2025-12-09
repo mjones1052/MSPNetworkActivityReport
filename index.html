@@ -208,23 +208,12 @@
     </div>
 
     <script>
-        // Using AllOrigins public CORS proxy for testing
-        // For production, use your own Cloudflare Worker or proxy
-        const USE_PUBLIC_PROXY = true; // Set to false when using your own proxy
+        // Google Drive file - direct download format
+        const GOOGLE_DRIVE_FILE_ID = '1L53vDkd2a05jBFW9gl-0Qx24yLAReoj6';
+        const ONEDRIVE_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_DRIVE_FILE_ID}/export?format=xlsx`;
         
-        // OneDrive file URL
-        const ONEDRIVE_FILE_URL = 'https://ghrhealthcare-my.sharepoint.com/:x:/p/mjones/IQCOJ81PbkyRQKZ17r7NO85bAX1dtYC558jNSJFHKgNdCgs?e=HVJe9K&download=1';
-        
-        // Proxy URLs
-        const PUBLIC_PROXY = 'https://api.allorigins.win/raw?url=';
-        const CUSTOM_PROXY = 'https://ghr-proxy.YOUR-SUBDOMAIN.workers.dev?url='; // Replace with your worker URL
-        
-        // Choose proxy
-        const PROXY_URL = USE_PUBLIC_PROXY ? PUBLIC_PROXY : CUSTOM_PROXY;
-        const ONEDRIVE_URL = `${PROXY_URL}${encodeURIComponent(ONEDRIVE_FILE_URL)}`;
-        
-        // OneDrive edit link for users to modify the source file
-        const ONEDRIVE_EDIT_URL = 'https://ghrhealthcare-my.sharepoint.com/:x:/p/mjones/IQCOJ81PbkyRQKZ17r7NO85bAX1dtYC558jNSJFHKgNdCgs?e=HVJe9K';
+        // Google Drive edit link for users to modify the source file
+        const ONEDRIVE_EDIT_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_DRIVE_FILE_ID}/edit`;
         
         // Alternative: Add a backup file input for manual upload
         const USE_MANUAL_UPLOAD = false; // Set to true to show upload button instead
